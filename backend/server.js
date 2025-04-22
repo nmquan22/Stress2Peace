@@ -1,0 +1,240 @@
+import express from 'express';
+import cors from 'cors';
+import bodyParser from 'body-parser';
+import dotenv from 'dotenv';
+import axios from 'axios';  // Use axios to make HTTP requests
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+
+dotenv.config();
+
+const app = express();
+app.use(cors());
+app.use(bodyParser.json());
+
+// === MongoDB Setup ===
+mongoose.connect(process.env.VITE_MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
+
+// Define User schema
+const userSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+});
+const User = mongoose.model('User', userSchema);
+
+// === StressEntry Schema ===
+const stressEntrySchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  date: { type: String, required: true },
+  stressLevel: { type: Number, required: true },
+  emotion: { type: String, required: true },
+});
+const StressEntry = mongoose.model('StressEntry', stressEntrySchema);
+
+// == ChatLog Schema ===
+const ChatLogSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  message: String,
+  response: String,
+  timestamp: { type: Date, default: Date.now }
+});
+const ChatLog = mongoose.model('ChatLog', ChatLogSchema);
+
+// === JWT Middleware ===
+const authenticate = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ msg: 'No token' });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.userId = decoded.id;
+    next();
+  } catch (err) {
+    return res.status(403).json({ msg: 'Invalid token' });
+  }
+};
+
+// Set up Hugging Face API key
+const HUGGINGFACE_API_KEY = process.env.VITE_HUGGINGFACE_API_KEY;
+const HUGGINGFACE_URL = 'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0';
+
+app.post('/generate-image', async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    // Make POST request to Hugging Face API
+    const response = await axios.post(
+      HUGGINGFACE_URL,
+      { inputs: prompt },
+      {
+        headers: {
+          Authorization: `Bearer ${HUGGINGFACE_API_KEY}`,
+        },
+        responseType: 'arraybuffer',  // Ensure we get the image as a binary stream
+      }
+    );
+
+    const imageBuffer = Buffer.from(response.data);
+    res.setHeader("Content-Type", "image/png");
+    res.send(imageBuffer);
+  } catch (err) {
+    console.error("Image generation error:", err);
+    res.status(500).send("Failed to generate image");
+  }
+});
+
+// === Auth: Login Endpoint ===
+app.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ msg: 'User not found' });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ msg: 'Invalid password' });
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    res.json({ token });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+// === Optional: Register Endpoint ===
+app.post('/register', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const existingUser = await User.findOne({ email });
+    if (existingUser) return res.status(400).json({ msg: 'User already exists' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new User({ email, password: hashedPassword });
+    await newUser.save();
+
+    res.status(201).json({ msg: 'User registered successfully' });
+  } catch (err) {
+    console.error('Registration error:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+// const stressHistory = [
+//   { date: "2025-04-01", stressLevel: 5, emotion: "Calm" },
+//   { date: "2025-04-02", stressLevel: 7, emotion: "Sad" },
+//   { date: "2025-04-03", stressLevel: 3, emotion: "Happy" },
+//   { date: "2025-04-04", stressLevel: 9, emotion: "Angry" },
+//   { date: "2025-04-05", stressLevel: 4, emotion: "Inspired" },
+// ];
+
+// // API endpoint
+// app.get("/api/stress/history", (req, res) => {
+//   res.json(stressHistory);
+// });
+
+// === Add Stress Entry (Authenticated) ===
+app.post('/api/stress/add', authenticate, async (req, res) => {
+  const { date, stressLevel, emotion } = req.body;
+  try {
+    const entry = new StressEntry({ userId: req.userId, date, stressLevel, emotion });
+    await entry.save();
+    res.status(201).json({ msg: 'Entry saved' });
+  } catch (err) {
+    console.error('Add stress error:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+// === Get Stress History (Authenticated) ===
+app.get('/api/stress/history', authenticate, async (req, res) => {
+  try {
+    const history = await StressEntry.find({ userId: req.userId });
+    res.json(history);
+  } catch (err) {
+    console.error('Fetch stress history error:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+// === Chatbot RAG Route (Authenticated) ===
+app.post('/api/chat', authenticate, async (req, res) => {
+  const { message } = req.body;
+  const userId = req.userId;
+
+  try {
+    // const response = await axios.post('http://localhost:5001/rag/chat', {
+    //   query,
+    //   userId
+    // });
+    const response = await axios.post('http://127.0.0.1:5001/rag_chat', {
+      message,
+      userId
+    });
+
+    res.json(response.data);
+  } catch (err) {
+    console.error('Error calling RAG backend:', err.message);
+    res.status(500).json({ error: 'RAG backend error' });
+  }
+});
+
+
+// === Community Post Schema ===
+const communityPostSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  content: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+  tags: [String],
+  anonymous: { type: Boolean, default: false }
+});
+const CommunityPost = mongoose.model('CommunityPost', communityPostSchema);
+
+// create a new post
+app.post('/api/community/post', authenticate, async (req, res) => {
+  const { content, tags, anonymous } = req.body;
+
+  try {
+    const post = new CommunityPost({
+      userId: req.userId,
+      content,
+      tags,
+      anonymous: !!anonymous
+    });
+    await post.save();
+    res.status(201).json({ msg: 'Post created successfully' });
+  } catch (err) {
+    console.error('Community post error:', err);
+    res.status(500).json({ msg: 'Server error creating post' });
+  }
+});
+
+app.get('/api/community/posts', async (req, res) => {
+  try {
+    const posts = await CommunityPost.find({})
+      .sort({ createdAt: -1 })
+      .populate('userId', 'email'); // You could limit what you show
+    res.json(posts);
+  } catch (err) {
+    console.error('Fetch community posts error:', err);
+    res.status(500).json({ msg: 'Server error fetching posts' });
+  }
+});
+
+app.get('/api/community/myposts', authenticate, async (req, res) => {
+  try {
+    const posts = await CommunityPost.find({ userId: req.userId }).sort({ createdAt: -1 });
+    res.json(posts);
+  } catch (err) {
+    console.error('Fetch user posts error:', err);
+    res.status(500).json({ msg: 'Server error fetching user posts' });
+  }
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`✅ Backend running at http://localhost:${PORT}`);
+});
