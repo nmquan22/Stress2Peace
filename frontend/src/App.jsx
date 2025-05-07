@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate, useNavigate } from "react-router-dom";
 import {
-  LayoutDashboard, BrainCog, Mic, HeartPulse, Lightbulb, TreePine, Bot, Paintbrush, Timer, Menu, X, LogOut,
+  LayoutDashboard, BrainCog, Mic,Music, HeartPulse, Lightbulb, TreePine, Bot, Paintbrush, Timer, Menu, X, LogOut,
   SidebarOpen
 } from "lucide-react";
 
@@ -18,6 +18,7 @@ import Pomodoro from "./components/Pomodoro";
 import Login from "./pages/Login";
 import Register from "./pages/Register"; 
 import CommunityDashboard from "./components/CommunityDashboard";
+import SmartMusicPlayer from "./components/SmartMusic";
 
 // ✅ Helper function to check login
 const isAuthenticated = () => !!localStorage.getItem("token");
@@ -35,6 +36,7 @@ const Sidebar = ({ isOpen, handleLogout }) => {
     { name: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" />, path: "/" },
     { name: "Relaxation Plan", icon: <BrainCog className="w-5 h-5" />, path: "/relaxation" },
     { name: "Voice Companion", icon: <Mic className="w-5 h-5" />, path: "/voice" },
+    //{ name: "Smart Music", icon: <Music className="w-5 h-5" />, path: "/music"}, 
     { name: "Heart Monitor", icon: <HeartPulse className="w-5 h-5" />, path: "/heart" },
     { name: "Mood Lighting", icon: <Lightbulb className="w-5 h-5" />, path: "/lighting" },
     { name: "Virtual Garden", icon: <TreePine className="w-5 h-5" />, path: "/garden" },
@@ -67,6 +69,12 @@ const Sidebar = ({ isOpen, handleLogout }) => {
             ))}
           </ul>
         </div>
+
+        {/* Global Music Player */}
+        <div className="bottom-4 left-4 z-[60] w-72 h-full flex flex-col justify-between">
+            <SmartMusicPlayer autoPlay={true} />
+          </div>
+
         <button
           onClick={handleLogout}
           className="mt-8 flex items-center gap-2 text-red-500 hover:text-red-700 transition-all"
@@ -82,6 +90,7 @@ const routes = [
   { path: "/", component: Dashboard },
   { path: "/relaxation", component: RelaxationPlan },
   { path: "/voice", component: VoiceCompanion },
+  //{ path: "/music", component: SmartMusicPlayer},
   { path: "/heart", component: HeartMonitor },
   { path: "/lighting", component: MoodLighting },
   { path: "/garden", component: VirtualGarden },
@@ -139,7 +148,7 @@ function App() {
                 <div
                 className={`transition-all duration-300 ${
                   sidebarOpen ? "ml-90" : "ml-0"
-                } p-6 bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen ${sidebarOpen ? "w-294":"w-screen"}`}
+                } bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen ${sidebarOpen ? "w-294":"w-screen"}`}
                 >
                 <Component 
                 isFullscreen={!sidebarOpen}

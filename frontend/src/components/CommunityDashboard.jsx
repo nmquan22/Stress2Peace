@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Textarea } from '@/components/ui/textarea'; // Tailwind UI component
+import { Textarea } from '@/components/ui/textarea'; 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 

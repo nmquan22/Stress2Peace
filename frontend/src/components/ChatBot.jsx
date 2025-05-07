@@ -2,12 +2,25 @@
 
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { detectEmotion } from '@/utils/emotionDetect';
 
 const ChatBot = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [botTyping, setBotTyping] = useState(false);
 
+  // Load from localStorage on mount
+  useEffect(() => {
+    const savedMessages = localStorage.getItem('chatMessages');
+    if (savedMessages) {
+      setMessages(JSON.parse(savedMessages));
+    }
+  }, []);
+
+  // Save to localStorage whenever messages change
+  useEffect(() => {
+    localStorage.setItem('chatMessages', JSON.stringify(messages));
+  }, [messages]);
 
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -18,21 +31,34 @@ const ChatBot = () => {
     setBotTyping(true);
 
     try {
+      // Detect emotion from user input 
+      const userEmotion = await detectEmotion(input);
+      console.log("Detected Emotion:", userEmotion);
+
+      // get message from backend 
       const token = localStorage.getItem('token');
-      const response = await axios.post(
-        'http://localhost:5000/api/chat',
-        { message: input },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      // 2. Log emotion separately
+      await axios.post('http://localhost:5000/api/emotion/log', { message: input,emotion: userEmotion }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // const response = await axios.post(
+      //   'http://localhost:5000/api/chat',
+      //   { message: input },
+      //   {
+      //     headers: {
+      //       Authorization: `Bearer ${token}`,
+      //     },
+      //   }
+      // );
 
-      const botResponse = response.data.response;
-      const botMessage = { from: 'bot', text: botResponse };
+      // const botResponse = response.data.response;
+      // const botMessage = { from: 'bot', text: botResponse };
 
-      setMessages((prev) => [...prev, botMessage]);
+      // setMessages((prev) => {
+      //   const newMessages = [...prev];
+      //   newMessages[newMessages.length - 1].emotion = userEmotion;
+      //   return [...newMessages, botMessage];
+      // });
     } catch (err) {
       console.error('Chat error:', err);
       setMessages((prev) => [...prev, { from: 'bot', text: 'Sorry, something went wrong.' }]);

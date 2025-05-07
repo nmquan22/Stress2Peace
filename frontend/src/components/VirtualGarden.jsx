@@ -1,64 +1,233 @@
-import { useState } from "react";
-import { GiPlantWatering, GiSpiralLollipop } from "react-icons/gi";
-import { FaSeedling, FaTree } from "react-icons/fa";
-import { motion } from "framer-motion";
+import { useState, useRef, Suspense } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { OrbitControls, Stars, Sky, Cloud, useGLTF } from "@react-three/drei";
+import * as THREE from "three";
 
-const plantTypes = [
-  { type: "Seedling", icon: <FaSeedling />, color: "bg-green-300" },
-  { type: "Flower", icon: <GiSpiralLollipop />, color: "bg-pink-300" },
-  { type: "Sunflower", icon: <FaTree />, color: "bg-yellow-300" },
-  { type: "Cactus", icon: <GiPlantWatering />, color: "bg-green-500" },
+const emotions = [
+  { feeling: "Happy", weather: "sunny", emoji: "😄" },
+  { feeling: "Sad", weather: "rainy", emoji: "😢" },
+  { feeling: "Stressed", weather: "stormy", emoji: "😠" },
+  { feeling: "Relaxed", weather: "clear", emoji: "😌" },
 ];
 
-const VirtualGarden = () => {
-  const [garden, setGarden] = useState([]);
+const WeatherEffects = ({ weather }) => {
+  switch (weather) {
+    case "rainy":
+      return <Cloud opacity={0.6} speed={0.2} width={10} depth={5} segments={40} />;
+    case "stormy":
+      return <Cloud opacity={1} speed={0.8} width={20} depth={10} segments={50} />;
+    case "clear":
+      return <Stars radius={50} depth={50} count={5000} factor={4} saturation={0} fade />;
+    default:
+      return null;
+  }
+};
 
-  const growPlant = () => {
-    const randomPlant = plantTypes[Math.floor(Math.random() * plantTypes.length)];
-    setGarden([
-      ...garden,
-      { ...randomPlant, level: 1, id: Date.now() + Math.random() },
-    ]);
-  };
+const Ground = () => (
+  <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+    <planeGeometry args={[100, 100]} />
+    <meshStandardMaterial color="lightgreen" />
+  </mesh>
+);
 
-  const upgradePlant = (id) => {
-    setGarden((prev) =>
-      prev.map((plant) =>
-        plant.id === id && plant.level < 5
-          ? { ...plant, level: plant.level + 1 }
-          : plant
-      )
-    );
-  };
+const DraggableObject = ({ children, position, onDrop }) => {
+  const ref = useRef();
+  const { camera, mouse } = useThree();
+  const [isDragging, setIsDragging] = useState(false);
+  const planeIntersect = new THREE.Vector3();
+  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const raycaster = new THREE.Raycaster();
+
+  useFrame(() => {
+    if (isDragging && ref.current) {
+      raycaster.setFromCamera(mouse, camera);
+      raycaster.ray.intersectPlane(plane, planeIntersect);
+      ref.current.position.x = planeIntersect.x;
+      ref.current.position.z = planeIntersect.z;
+    }
+  });
 
   return (
-    <div className="p-8 text-center min-h-screen bg-gradient-to-b from-green-50 to-green-100">
-      <h1 className="text-4xl font-bold mb-4 text-green-800">🌿 Your Virtual Garden</h1>
-      <p className="text-green-600 mb-6">Grow and upgrade your plants to make your garden beautiful!</p>
-
-      <div className="flex flex-wrap justify-center gap-6 mb-8">
-        {garden.map((plant, index) => (
-          <motion.div
-            key={plant.id}
-            whileHover={{ scale: 1.1 }}
-            className={`p-4 rounded-xl shadow-xl text-white cursor-pointer ${plant.color}`}
-            onClick={() => upgradePlant(plant.id)}
-          >
-            <div className="text-4xl mb-2">{plant.icon}</div>
-            <p className="font-semibold">{plant.type}</p>
-            <p className="text-sm">Level: {plant.level}</p>
-          </motion.div>
-        ))}
-      </div>
-
-      <button
-        onClick={growPlant}
-        className="bg-green-600 text-white px-6 py-3 rounded-full shadow-md hover:bg-green-700 transition-all"
-      >
-        Grow a Plant 🌱
-      </button>
-    </div>
+    <group ref={ref} position={position}>
+      {/* Children should handle interaction now */}
+      {children({ setIsDragging, ref })}
+    </group>
   );
 };
 
-export default VirtualGarden;
+const Tree = ({ position, size }) => (
+  <DraggableObject position={position}>
+    {({ setIsDragging }) => (
+      <mesh
+        castShadow
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsDragging(true);
+        }}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          setIsDragging(false);
+        }}
+      >
+        <cylinderGeometry args={[0.3 * size, 0.5 * size, 2 * size, 8]} />
+        <meshStandardMaterial color="sienna" />
+        <mesh position={[0, 1.5 * size, 0]}>
+          <sphereGeometry args={[1 * size, 8, 8]} />
+          <meshStandardMaterial color="forestgreen" />
+        </mesh>
+      </mesh>
+    )}
+  </DraggableObject>
+);
+
+const Flower = ({ position }) => {
+  const { scene } = useGLTF("/models/black_pearl_coral_fall.glb");
+
+  if (!scene) {
+    console.warn("Flower model not loaded.");
+    return null;
+  }
+
+  return (
+    <DraggableObject position={position}>
+      {({ setIsDragging }) => (
+        <primitive
+          object={scene.clone()}
+          scale={1}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            setIsDragging(true);
+          }}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            setIsDragging(false);
+          }}
+        />
+      )}
+    </DraggableObject>
+  );
+};
+
+const House = ({ position }) => {
+  const { scene } = useGLTF("/models/house.glb");
+
+  return (
+    <DraggableObject position={position}>
+      {({ setIsDragging }) => (
+        <primitive
+          object={scene.clone()}
+          scale={0.001}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            setIsDragging(true);
+          }}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            setIsDragging(false);
+          }}
+        />
+      )}
+    </DraggableObject>
+  );
+};
+
+const Dog = ({ position }) => {
+  const { scene } = useGLTF("/models/dog.glb");
+
+  return (
+    <DraggableObject position={position}>
+      {({ setIsDragging }) => (
+        <primitive
+          object={scene.clone()}
+          scale={1}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            setIsDragging(true);
+          }}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            setIsDragging(false);
+          }}
+        />
+      )}
+    </DraggableObject>
+  );
+};
+
+export default function VirtualGarden() {
+  const [weather, setWeather] = useState("sunny");
+  const [treeSize, setTreeSize] = useState(1);
+  const [coins, setCoins] = useState(0);
+  const [trees, setTrees] = useState([{ x: 5 , z: 5 }]);
+  const [flowers, setFlowers] = useState([{x: -10, z:-3}]);
+  const [houses, setHouses] = useState([]);
+  const [dogs, setDogs] = useState([{ x: 10, z: -4 }]);
+
+  const handleEmotionSelect = (selectedWeather) => setWeather(selectedWeather);
+
+  const handleWaterTree = () => {
+    setTreeSize((prev) => Math.min(prev + 0.2, 2));
+    setCoins((prev) => prev + 5);
+  };
+
+  const handleBuyFlower = () => {
+    if (coins >= 10) {
+      setFlowers([...flowers, { x: Math.random() * 10 - 5, z: Math.random() * 10 - 5 }]);
+      setCoins((prev) => prev - 10);
+    }
+  };
+
+  const handleBuyHouse = () => {
+    if (coins >= 50) {
+      setHouses([...houses, { x: Math.random() * 10 - 5, z: Math.random() * 10 - 5 }]);
+      setCoins((prev) => prev - 50);
+    }
+  };
+
+  return (
+    <div className="h-screen w-full flex flex-col bg-gradient-to-b from-green-100 to-green-300">
+      <header className="p-4 flex justify-between items-center bg-white shadow z-10">
+        <div className="px-20 flex gap-4 items-center">
+          {emotions.map((emotion) => (
+            <button
+              key={emotion.feeling}
+              onClick={() => handleEmotionSelect(emotion.weather)}
+              className="px-3 py-1 bg-green-100 rounded-full hover:bg-green-300 transition text-green-800"
+            >
+              {emotion.emoji} {emotion.feeling}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-3 items-center">
+          <span className="text-green-800 font-semibold">Coins: {coins}</span>
+          <button onClick={handleWaterTree} className="bg-blue-200 px-3 py-1 rounded hover:bg-blue-300">Water Tree 💧</button>
+          <button onClick={handleBuyFlower} className="bg-pink-200 px-3 py-1 rounded hover:bg-pink-300">Buy Flower 🌸</button>
+          <button onClick={handleBuyHouse} className="bg-yellow-200 px-3 py-1 rounded hover:bg-yellow-300">Buy House 🏠</button>
+        </div>
+      </header>
+
+      <div className="flex-1">
+        <Canvas
+          shadows
+          camera={{ position: [0, 5, 10], fov: 50 }}
+          style={{ background: weather === "stormy" ? "#666" : weather === "rainy" ? "#89CFF0" : "#87CEEB" }}
+        >
+          <ambientLight intensity={0.5} />
+          <directionalLight position={[5, 10, 5]} intensity={1} castShadow />
+          <Ground />
+
+          <Suspense fallback={null}>
+            {trees.map((t, i) => <Tree key={i} position={[t.x, 0, t.z]} size={treeSize} />)}
+            {flowers.map((f, index) => <Flower key={index} position={[f.x, 0, f.z]} />)}
+            {houses.map((h, i) => <House key={i} position={[h.x, 0, h.z]} />)}
+            {dogs.map((d, iDog) => <Dog key={iDog} position={[d.x, 0, d.z]} />)}
+          </Suspense>
+
+          <OrbitControls />
+          <Sky sunPosition={[100, 20, 100]} />
+          <WeatherEffects weather={weather} />
+        </Canvas>
+      </div>
+    </div>
+  );
+}

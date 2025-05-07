@@ -1,32 +1,39 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from langchain.chains import RetrievalQA
-from langchain_cohere import CohereEmbeddings
-from langchain_cohere import ChatCohere
 from langchain_mongodb import MongoDBAtlasVectorSearch
+from langchain_huggingface import HuggingFaceEmbeddings
+# from langchain_community.llms import HuggingFacePipeline
+# from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+from langchain_cohere import ChatCohere
 from pymongo import MongoClient
+from dotenv import load_dotenv
 import os
 import traceback
-from dotenv import load_dotenv
 
+# Setup
 app = Flask(__name__)
 CORS(app)
 load_dotenv()
 
-# === Environment Variables ===
+# Environment Variables
 cohere_api_key = os.getenv("VITE_COHERE_API_KEY")
-mongo_uri = os.getenv("VITE_MONGO_URI")  # example: mongodb+srv://user:pass@cluster.mongodb.net/?retryWrites=true&w=majority
+mongo_uri = os.getenv("VITE_MONGO_URI")
 mongo_db = os.getenv("MONGO_DB_NAME", "Stress2Peace")
-mongo_collection = os.getenv("MONGO_COLLECTION_NAME", "documents")
+mongo_collection = os.getenv("MONGO_COLLECTION_NAME", "document")
+chat_history_collection_name = os.getenv("CHAT_HISTORY_COLLECTION_NAME", "chatHistory")
 
-# === Setup ===
+# MongoDB Client
 client = MongoClient(mongo_uri)
-collection = client[mongo_db][mongo_collection]
+db = client[mongo_db]
+collection = db[mongo_collection]
+chat_history_collection = db[chat_history_collection_name]
 
-embeddings = CohereEmbeddings(
-    cohere_api_key=cohere_api_key,
-    model="embed-english-v3.0"
-)
+# # Embeddings + LLM
+# embeddings = CohereEmbeddings(
+#     cohere_api_key=cohere_api_key,
+#     model="embed-english-v3.0"
+# )
 
 llm = ChatCohere(
     cohere_api_key=cohere_api_key,
@@ -35,50 +42,103 @@ llm = ChatCohere(
     max_tokens=300
 )
 
-# Function to filter documents based on user_id
-def filter_documents_by_user_id(retriever, user_id):
-    # Retrieve the documents
-    documents = retriever.retrieve()
+# === Embeddings ===
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
 
-    # Filter documents based on user_id (assuming the metadata contains 'userId')
-    filtered_documents = [
-        doc for doc in documents if doc.get('metadata', {}).get('userId') == user_id
-    ]
-    
-    return filtered_documents
+
+# Setup Vector Store
+vector_store = MongoDBAtlasVectorSearch(
+    collection=collection,
+    embedding=embeddings,
+    #index_name = "vector_index", for cohere embedding
+    index_name = "vector_hf",
+
+)
+
+# # ====== Helper functions ======
+# def save_to_mongo(text, embedding, user_id, topic="general"):
+#     document = {
+#         "text": text,
+#         "embedding": embedding,
+#         "metadata": {
+#             "userId": user_id,
+#             "createdAt": datetime.now().isoformat(),
+#             "topic": topic
+#         }
+#     }
+#     collection.insert_one(document)
+
+# def save_history(user_id, user_message, bot_message):
+#     history_collection.insert_one({
+#         "userId": user_id,
+#         "user_message": user_message,
+#         "bot_message": bot_message,
+#         "createdAt": datetime.now().isoformat()
+#     })
+
+# def retrieve_similar(user_id, query, k=3):
+#     results = vector_store.similarity_search(
+#         query=query,
+#         k=k,
+#         pre_filter={"metadata.userId": {"$eq": user_id}}  # Only retrieve user-specific data
+#     )
+#     return results
 
 @app.route("/rag_chat", methods=["POST"])
 def rag_chat():
-    data = request.get_json()
-    query = data.get("message", "")
-    user_id = data.get("userId", None)
-    print("User ID:", user_id)
-
-    if not query:
-        return jsonify({"response": "No message provided"}), 400
-
     try:
-        # Filter documents by userId metadata
-        vector_store = MongoDBAtlasVectorSearch(
-            collection=collection,
-            embedding=embeddings,
-        )
-        
+        data = request.get_json()
+        query = data.get("message", "")
+        user_id = data.get("userId", None)
+
+        if not query or not user_id:
+            return jsonify({"error": "Missing message or userId"}), 400
+
+        # Create retriever with pre-filtering
         retriever = vector_store.as_retriever(
-            search_kwargs={'pre_filter': {'metadata.userId': {'$eq': user_id}}}
+            # search_kwargs={
+            #     'filter': {
+            #     'metadata.userId': {'$eq': user_id},
+            #     }
+            # } #old version 
+            filter= {
+                'metadata.userId': {'$eq': user_id}
+                }
         )
-        
+
+        # RetrievalQA chain
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
             retriever=retriever,
-            verbose=True  # Enable detailed logging
+            verbose=True
         )
-        result = qa_chain.invoke({"query": query})  # Sử dụng invoke thay vì run
+
+        # Get result
+        result = qa_chain.invoke({"query": query})
+
+        # Save chat history
+        chat_history_collection.insert_one({
+            "userId": user_id,
+            "query": query,
+            "response": result["result"],
+        })
+        # 4. Save the new question+answer into the vector database
+        # Save as a new document
+        doc = {
+            "text": f"User: {query}\nBot: {result["result"]}",
+            "embedding": embeddings.embed_query(query),
+            "metadata": {
+                "userId": user_id,
+            }
+        }
+        collection.insert_one(doc)
         return jsonify({"response": result["result"]})
-        
+
     except Exception as e:
-        print("Full error traceback:", traceback.format_exc())
-        return jsonify({"response": f"Filter error: {str(e)}"}), 500
+        print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-     app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(host="0.0.0.0", port=5001, debug=True)

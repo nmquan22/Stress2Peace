@@ -6,12 +6,27 @@ import axios from 'axios';  // Use axios to make HTTP requests
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import moment from 'moment';
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+
+const emotionToStressLevel = {
+  "joy": 1,
+  "surprise": 1,
+  "Excited": 2,
+  "Inspired": 2,
+  "calm": 2,
+  "neutral": 3,
+  "confused": 3,
+  "sadness": 4,
+  "anger": 7,
+  "disgust": 6,
+  "fear": 5,
+};
 
 // === MongoDB Setup ===
 mongoose.connect(process.env.VITE_MONGO_URI, {
@@ -43,6 +58,15 @@ const ChatLogSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now }
 });
 const ChatLog = mongoose.model('ChatLog', ChatLogSchema);
+
+// === DailyMoodSummary Schema ===
+const dailyMoodSummarySchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  date: { type: String, required: true }, // e.g., '2025-05-01'
+  moods: [String],
+  mostFrequentMood: String,
+});
+const DailyMoodSummary = mongoose.model('DailyMoodSummary', dailyMoodSummarySchema);
 
 // === JWT Middleware ===
 const authenticate = (req, res, next) => {
@@ -123,18 +147,6 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// const stressHistory = [
-//   { date: "2025-04-01", stressLevel: 5, emotion: "Calm" },
-//   { date: "2025-04-02", stressLevel: 7, emotion: "Sad" },
-//   { date: "2025-04-03", stressLevel: 3, emotion: "Happy" },
-//   { date: "2025-04-04", stressLevel: 9, emotion: "Angry" },
-//   { date: "2025-04-05", stressLevel: 4, emotion: "Inspired" },
-// ];
-
-// // API endpoint
-// app.get("/api/stress/history", (req, res) => {
-//   res.json(stressHistory);
-// });
 
 // === Add Stress Entry (Authenticated) ===
 app.post('/api/stress/add', authenticate, async (req, res) => {
@@ -179,6 +191,55 @@ app.post('/api/chat', authenticate, async (req, res) => {
   } catch (err) {
     console.error('Error calling RAG backend:', err.message);
     res.status(500).json({ error: 'RAG backend error' });
+  }
+});
+
+app.post('/api/emotion/log', authenticate, async (req, res) => {
+  const { message, emotion } = req.body;
+  const userId = req.userId;
+
+  // Check if emotion is provided
+  if (!emotion) {
+    return res.status(400).json({ error: 'Emotion is required' });
+  }
+  const normalized = emotion.toLowerCase();
+  const stressLevel = emotionToStressLevel[normalized] || 3;
+  try {
+    const today = moment().format('YYYY-MM-DD');
+
+    // === Update DailyMoodSummary ===
+    const summary = await DailyMoodSummary.findOneAndUpdate(
+      { userId, date: today },
+      { $push: { moods: emotion } },
+      { new: true, upsert: true }
+    );
+
+    // Recalculate most frequent mood
+    if (summary && summary.moods.length > 0) {
+      const freqMap = {};
+      summary.moods.forEach((m) => (freqMap[m] = (freqMap[m] || 0) + 1));
+      summary.mostFrequentMood = Object.entries(freqMap).sort((a, b) => b[1] - a[1])[0][0];
+      await summary.save();
+    }
+
+    // === Update StressEntry ===
+    await StressEntry.findOneAndUpdate(
+      { userId, date: today },
+      {
+        $set: { emotion, stressLevel },
+        $setOnInsert: { createdAt: new Date() }
+      },
+      { new: true, upsert: true }
+    );
+
+    // Log successful update
+    console.log(`Successfully logged emotion: ${emotion} for userId: ${userId} on ${today}`);
+
+    // Send response with updated summary
+    res.json({ status: 'ok', emotion, updatedSummary: summary });
+  } catch (err) {
+    console.error('Emotion logging error:', err);
+    res.status(500).json({ error: 'Emotion detection failed' });
   }
 });
 
