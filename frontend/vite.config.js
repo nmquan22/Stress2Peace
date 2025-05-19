@@ -2,12 +2,28 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path';
+import glsl from "vite-plugin-glsl";
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+     // GLSL support
+    glsl(),
+
+    // .js file support as if it was JSX
+    {
+      name: "load+transform-js-files-as-jsx",
+      async transform(code, id) {
+        if (!id.match(/src\/.*\.js$/)) return null;
+
+        return transformWithEsbuild(code, id, {
+          loader: "jsx",
+          jsx: "automatic",
+        });
+      },
+    },
   ],
   resolve: {
     alias: {
