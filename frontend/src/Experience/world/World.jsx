@@ -11,9 +11,9 @@ export default function World(props) {
       {modelsData.map((model) => (
         <Model key={model.name} item={model} />
       ))}
-      <About />
-      <Links />
-      <Works />
+      {/* <About />
+      <Links /> */}
+      {/* <Works /> */}
     </group>
   );
 }

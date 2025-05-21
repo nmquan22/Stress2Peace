@@ -2,7 +2,7 @@ import { Routes, Route } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import RelaxationPlan from './components/RelaxationPlan';
 import VoiceCompanion from './components/VoiceCompanion';
-import HeartMonitor from './components/HeartMonitor';
+import HeartMonitor from './components/FacialMoodDetection';
 import MoodLighting from './components/MoodLighting';
 import VirtualGarden from './components/VirtualGarden';
 import ChatBot from './components/ChatBot';

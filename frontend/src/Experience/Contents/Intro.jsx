@@ -29,27 +29,17 @@ const Intro = () => {
         className="p-6 w-full max-w-lg bg-[#ffffff75] border-2 border-white rounded-lg"
       >
         <p className="text-base leading-relaxed text-[#3E3232]">
-          🌟<span className="font-bold "> Welcome to my portfolio!</span> 🌟 I appreciate your visit
-          and interest in my work.
+         🌿 <span className="font-bold">Welcome to Stress2Peace!</span> 🌿 We're glad you're here on your journey to relaxation and emotional balance.
           <br />
           <br />
-          ⚠️ Please remember to press the{" "}
-          <span className="p-1 bg-[#ffffff44] border-2 border-white rounded-lg">Esc</span> key
-          before clicking any links to escape from pointerLock.
+          💡 Before navigating links, please press the{" "}
+          <span className="p-1 bg-[#ffffff44] border-2 border-white rounded-lg">Esc</span> key to exit focus mode for smooth interaction.
           <br />
-          ⚠️ If discord invite link in "INFORMATION" section expires, you can find me with my
-          username - "novarista_13".
+          🧘‍♀️ Explore calming features like guided meditation, stress-relief games, and personalized support. Your well-being matters.
           <br />
-          <br />
-          🖱️ Feel free to explore and enjoy the various projects and achievements showcased here. 🎨
-          Your feedback and thoughts are always welcome.
-          <br />
-          💬 Thank you for stopping by, and I hope you find my portfolio inspiring and engaging!
+          💬 We’d love to hear your feedback or thoughts—every insight helps us create a more peaceful space.
           <br />
           <br />
-          <span className="text-center block">
-            🌟Click "?" on the bottom-left corner to reopen this!🌟
-          </span>
         </p>
       </div>
       <button

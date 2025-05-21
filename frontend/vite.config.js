@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path';
 import glsl from "vite-plugin-glsl";
+import { transformWithEsbuild } from 'vite';
 
 // https://vite.dev/config/
 export default defineConfig({

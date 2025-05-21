@@ -2,9 +2,20 @@ import { useGLTF } from "@react-three/drei";
 import { useMemo } from "react";
 
 const useModelResources = (model) => {
-  const { nodes } = useMemo(() => {
+  const { scene, nodes } = useMemo(() => {
     return useGLTF("/world.glb");
   }, []);
+
+  // ✂️ Lọc và ẩn các mesh bị lỗi (shadow mesh)
+  useMemo(() => {
+    scene.traverse((obj) => {
+    if (obj.isMesh) {
+      console.log("Name:", obj.name);
+      console.log("Material:", obj.material?.name);
+      console.log("Visible:", obj.visible);
+    }
+  });
+  }, [scene]);
 
   const resources = useMemo(() => {
     if (!model) return null;

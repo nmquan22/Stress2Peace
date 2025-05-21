@@ -3,13 +3,13 @@ import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, BrainCog, Mic,Music, HeartPulse, Lightbulb, TreePine, Bot, Paintbrush, Timer, Menu, X, LogOut,
-  SidebarOpen
+  SidebarOpen,Camera
 } from "lucide-react";
 
 import Dashboard from "./components/Dashboard";
 import RelaxationPlan from "./components/RelaxationPlan";
 import VoiceCompanion from "./components/VoiceCompanion";
-import HeartMonitor from "./components/HeartMonitor";
+import FacialMoodDetector from "./components/FacialMoodDetection";
 import MoodLighting from "./components/MoodLighting";
 import VirtualGarden from "./components/VirtualGarden";
 import ChatBot from "./components/ChatBot";
@@ -37,7 +37,7 @@ const Sidebar = ({ isOpen, handleLogout }) => {
     { name: "Relaxation Plan", icon: <BrainCog className="w-5 h-5" />, path: "/relaxation" },
     { name: "Voice Companion", icon: <Mic className="w-5 h-5" />, path: "/voice" },
     //{ name: "Smart Music", icon: <Music className="w-5 h-5" />, path: "/music"}, 
-    { name: "Heart Monitor", icon: <HeartPulse className="w-5 h-5" />, path: "/heart" },
+    { name: "Facial Detection", icon: <Camera className="w-5 h-5" />, path: "/facial" },
     { name: "Mood Lighting", icon: <Lightbulb className="w-5 h-5" />, path: "/lighting" },
     { name: "Virtual Garden", icon: <TreePine className="w-5 h-5" />, path: "/garden" },
     { name: "Chatbot", icon: <Bot className="w-5 h-5" />, path: "/chat" },
@@ -91,7 +91,7 @@ const routes = [
   { path: "/relaxation", component: RelaxationPlan },
   { path: "/voice", component: VoiceCompanion },
   //{ path: "/music", component: SmartMusicPlayer},
-  { path: "/heart", component: HeartMonitor },
+  { path: "/facial", component: FacialMoodDetector },
   { path: "/lighting", component: MoodLighting },
   { path: "/garden", component: VirtualGarden },
   { path: "/chat", component: ChatBot },

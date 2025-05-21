@@ -18,8 +18,7 @@ const Model = ({ item }) => {
           side={
             (item.name === "trees_3" ||
               item.name === "trees_5" ||
-              item.name === "trees_6" ||
-              item.name === "boardBounds") &&
+              item.name === "trees_6") &&
             THREE.DoubleSide
           }
         />
