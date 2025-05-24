@@ -17,6 +17,7 @@ function Login() {
       });
 
       localStorage.setItem("token", res.data.token);
+      localStorage.setItem("role", res.data.role);
       navigate("/"); // Redirect to dashboard
     } catch (err) {
       setErrorMsg(err.response?.data?.message || "Login failed");

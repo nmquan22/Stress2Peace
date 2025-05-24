@@ -19,9 +19,11 @@ import Login from "./pages/Login";
 import Register from "./pages/Register"; 
 import CommunityDashboard from "./components/CommunityDashboard";
 import SmartMusicPlayer from "./components/SmartMusic";
+import AdminDashboard from "./components/AdminDashboard";
 
 // ✅ Helper function to check login
 const isAuthenticated = () => !!localStorage.getItem("token");
+const getUserRole = () => localStorage.getItem("role"); // 'admin' or 'user'
 
 // Unified toggle for all routes
 const toggleLayout = () => {
@@ -32,7 +34,14 @@ const toggleLayout = () => {
 const Sidebar = ({ isOpen, handleLogout }) => {
   const location = useLocation();
 
-  const menuItems = [
+  const role = getUserRole();
+  const menuItems = role === "admin"
+  ? [
+      { name: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" />, path: "/" },
+      { name: "Community", icon: <SidebarOpen className="w-5 h-5" />, path: "/community" },
+      // Add other admin tools if needed
+    ]
+  :[
     { name: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" />, path: "/" },
     { name: "Relaxation Plan", icon: <BrainCog className="w-5 h-5" />, path: "/relaxation" },
     { name: "Voice Companion", icon: <Mic className="w-5 h-5" />, path: "/voice" },
@@ -86,7 +95,7 @@ const Sidebar = ({ isOpen, handleLogout }) => {
   );
 };
 
-const routes = [
+const userRoutes = [
   { path: "/", component: Dashboard },
   { path: "/relaxation", component: RelaxationPlan },
   { path: "/voice", component: VoiceCompanion },
@@ -100,7 +109,12 @@ const routes = [
   {path: "/community",component: CommunityDashboard}
 ];
 
-// ✅ Protected route wrapper
+const adminRoutes = [
+  { path: "/", component: AdminDashboard },
+  { path: "/community", component: CommunityDashboard },
+];
+
+// Protected route wrapper
 const ProtectedRoute = ({ children }) => {
   return isAuthenticated() ? children : <Navigate to="/login" />;
 };
@@ -109,10 +123,27 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
   console.log("sidebarOpen",sidebarOpen);
+  const [role, setRole] = useState(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const storedRole = localStorage.getItem("role");
+
+    if (!token) {
+      navigate("/login");
+    } else {
+      setRole(storedRole);
+      console.log("Stored role:", role);
+    }
+  }, [navigate]);
+
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("role");
     navigate("/login");
   };
+
+  const routes = role === "admin" ? adminRoutes : userRoutes;
 
   return (
     <div className="relative min-h-screen">

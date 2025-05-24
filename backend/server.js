@@ -38,6 +38,7 @@ mongoose.connect(process.env.VITE_MONGO_URI, {
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+role: { type: String, enum: ['user', 'admin'], default: 'user' },
 });
 const User = mongoose.model('User', userSchema);
 
@@ -76,6 +77,7 @@ const authenticate = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.userId = decoded.id;
+    req.role = decoded.role; 
     next();
   } catch (err) {
     return res.status(403).json({ msg: 'Invalid token' });
@@ -121,8 +123,8 @@ app.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ msg: 'Invalid password' });
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.json({ token });
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    res.json({ token, role: user.role }); 
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ msg: 'Server error' });
@@ -131,13 +133,13 @@ app.post('/login', async (req, res) => {
 
 // === Optional: Register Endpoint ===
 app.post('/register', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, role } = req.body; // role optional
   try {
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).json({ msg: 'User already exists' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ email, password: hashedPassword });
+    const newUser = new User({ email, password: hashedPassword, role: role || 'user' });
     await newUser.save();
 
     res.status(201).json({ msg: 'User registered successfully' });
@@ -243,6 +245,22 @@ app.post('/api/emotion/log', authenticate, async (req, res) => {
   }
 });
 
+// === Get Current Mood ===
+app.get('/api/mood/current', authenticate, async (req, res) => {
+  try {
+    const today = moment().format('YYYY-MM-DD');
+    const summary = await DailyMoodSummary.findOne({ userId: req.userId, date: today });
+
+    if (!summary || !summary.mostFrequentMood) {
+      return res.status(404).json({ message: "No mood recorded for today" });
+    }
+
+    res.json({ mood: summary.mostFrequentMood });
+  } catch (err) {
+    console.error("Error fetching current mood:", err);
+    res.status(500).json({ message: "Server error fetching mood" });
+  }
+});
 
 // === Community Post Schema ===
 const communityPostSchema = new mongoose.Schema({
